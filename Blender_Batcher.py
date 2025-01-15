@@ -2,9 +2,12 @@ import bpy
 import os
 import logging
 
-search_directory = r"YOUR DIR HERE" # Directory you wanna convert
+search_directory = r"F:\torrents\Dragon's Dogma 2\REtool\re_chunk_000\natives\stm"
 log_file = os.path.join(search_directory, "BatchConvert.log")
 unsupported_files_file = os.path.join(search_directory, "UnsupportedFiles.txt")
+
+# Set to True if you want to export as .blend with packed files, False for .glb
+ExportBlendNoGLB = False
 
 logging.basicConfig(
     filename=log_file,
@@ -55,10 +58,14 @@ while mesh_files:
         bpy.ops.re_mesh.importfile(filepath=file_path, files=files_list, directory=root)
         logging.info(f"Successfully imported {file_name}")
 
-        export_path = os.path.join(root, f"{os.path.splitext(file_name)[0]}.glb")
-
-        bpy.ops.export_scene.gltf(filepath=export_path, export_format='GLB')
-        logging.info(f"Exported .glb to {export_path}")
+        if ExportBlendNoGLB:
+            export_path = os.path.join(root, f"{os.path.splitext(file_name)[0]}.blend")
+            bpy.ops.wm.save_as_mainfile(filepath=export_path, copy=True)
+            logging.info(f"Exported .blend with packed files to {export_path}")
+        else:
+            export_path = os.path.join(root, f"{os.path.splitext(file_name)[0]}.glb")
+            bpy.ops.export_scene.gltf(filepath=export_path, export_format='GLB')
+            logging.info(f"Exported .glb to {export_path}")
 
         clean_scene()
         logging.info("Scene cleaned up.")
@@ -66,6 +73,9 @@ while mesh_files:
     except Exception as e:
         if "MPLY formatted mesh files" in str(e):
             logging.warning(f"Skipping unsupported file: {file_name} ({e})")
+            log_unsupported_file(file_name)
+        elif "AttributeError: 'NoneType' object has no attribute 'count'" in str(e):
+            logging.warning(f"Skipping file due to missing skeleton data: {file_name} ({e})")
             log_unsupported_file(file_name)
         else:
             logging.error(f"Error processing {file_name}: {e}")
