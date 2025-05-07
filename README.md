@@ -1,12 +1,12 @@
 # RE-Mesh Editor Batch Convert Tool
 
-This script provides a tool for batch importing `.mesh` files into Blender using the RE-Mesh Editor plugin, exporting them as `.glb` or `.blend` with packed files, and logging the process.
+This script provides a tool for batch importing `.mesh` files into Blender using the RE-Mesh Editor plugin, exporting them as `.fbx` or `.blend` with packed files, and logging the process.
 
 ## Features
 
 - **Batch File Processing**: Automatically imports `.mesh` files found within a directory and its subdirectories.
 - **Export Options**:
-  - Export to `.glb` format with minimal file size.
+  - Export to `.fbx` format with minimal file size.
   - Export to `.blend` format with packed files (textures, meshes, etc.).
 - **Logging**: Logs the batch conversion process, including unsupported files, to `BatchConvert.log`.
 - **Unsupported Files**: Files that fail to import are logged in `UnsupportedFiles.txt` for further analysis.
@@ -30,7 +30,7 @@ This script provides a tool for batch importing `.mesh` files into Blender using
 3. Modify the `search_directory` variable to point to the folder containing the `.mesh` files you want to batch process.
 4. Set the `ExportBlendNoGLB` flag:
    - `True` to export `.blend` files with packed data.
-   - `False` to export `.glb` files.
+   - `False` to export `.fbx` files.
    
    Example:
    ```python
@@ -47,7 +47,7 @@ This script provides a tool for batch importing `.mesh` files into Blender using
 ### Exported Files
 
 - If `ExportBlendNoGLB` is set to `True`, each `.mesh` file will be exported as a `.blend` file with packed resources.
-- If `ExportBlendNoGLB` is set to `False`, each `.mesh` file will be exported as a `.glb` file.
+- If `ExportBlendNoGLB` is set to `False`, each `.mesh` file will be exported as a `.fbx` file.
 
 ---
 
