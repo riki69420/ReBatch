@@ -1,84 +1,161 @@
 import bpy
 import os
 import logging
+import re
 
-search_directory = r"F:\torrents\Dragon's Dogma 2\REtool\re_chunk_000\natives\stm"
+search_directory = r"F:\torrents\MonsterHunterWilds\re_chunk_000\natives\stm\art\model\character"
 log_file = os.path.join(search_directory, "BatchConvert.log")
-unsupported_files_file = os.path.join(search_directory, "UnsupportedFiles.txt")
+unsupported_file = os.path.join(search_directory, "UnsupportedFiles.txt")
+mesh_pattern = re.compile(r"\.mesh\.\d+$")
+skip_patterns = ['.mesh.fbx', '.blend']
+export_as_blend = False  # True: .blend, False: .fbx
+max_retries = 1
 
-# Set to True if you want to export as .blend with packed files, False for .glb
-ExportBlendNoGLB = False
+is_background = bpy.app.background
+
+open(log_file, 'w').close()
+open(unsupported_file, 'w').close()
 
 logging.basicConfig(
     filename=log_file,
     level=logging.INFO,
-    format="%(asctime)s - %(message)s",
+    format="%(asctime)s | %(levelname)s | %(message)s",
 )
-
 logging.info("Batch conversion started.")
 
 def clean_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
-
-    for collection in bpy.data.collections:
-        bpy.data.collections.remove(collection)
+    for col in list(bpy.data.collections):
+        bpy.data.collections.remove(col)
+    # Purge orphan datablocks
+    for datablock_list in (bpy.data.images, bpy.data.meshes, bpy.data.materials,
+                           bpy.data.textures, bpy.data.curves, bpy.data.armatures,
+                           bpy.data.actions, bpy.data.node_groups):
+        for datablock in list(datablock_list):
+            if datablock.users == 0:
+                try:
+                    datablock_list.remove(datablock)
+                except Exception:
+                    pass
 
 def find_mesh_files(directory):
-    mesh_files = []
-    for root, dirs, files in os.walk(directory):
-        for file_name in files:
-            if '.mesh.' in file_name and '.mesh.glb' not in file_name:
-                file_path = os.path.join(root, file_name)
-                mesh_files.append((file_name, file_path, root))
-    return mesh_files
+    files = []
+    for root, _, names in os.walk(directory):
+        for fn in names:
+            if any(skip in fn for skip in skip_patterns):
+                continue
+            if mesh_pattern.search(fn):
+                files.append((fn, os.path.join(root, fn), root))
+    return files
 
-def log_unsupported_file(file_name):
-    with open(unsupported_files_file, 'a') as f:
-        f.write(f"{file_name}\n")
+def log_unsupported(fn):
+    with open(unsupported_file, 'a') as uf:
+        uf.write(fn + '\n')
 
-processed_files = set()
-
-mesh_files = find_mesh_files(search_directory)
-
-while mesh_files:
-    file_name, file_path, root = mesh_files.pop(0)
-
-    if file_path in processed_files:
-        logging.info(f"Skipping already processed file: {file_name}")
-        continue
-
-    logging.info(f"Found file: {file_name}")
-    
-    processed_files.add(file_path)
-    
-    files_list = [{"name": file_name, "name": file_name}]
-    
+def process_mesh(fn, path, root):
     try:
-        bpy.ops.re_mesh.importfile(filepath=file_path, files=files_list, directory=root)
-        logging.info(f"Successfully imported {file_name}")
-
-        if ExportBlendNoGLB:
-            export_path = os.path.join(root, f"{os.path.splitext(file_name)[0]}.blend")
-            bpy.ops.wm.save_as_mainfile(filepath=export_path, copy=True)
-            logging.info(f"Exported .blend with packed files to {export_path}")
+        bpy.ops.re_mesh.importfile(filepath=path, files=[{"name": fn}], directory=root)
+        if export_as_blend:
+            bpy.ops.file.pack_all()
+            out = os.path.join(root, f"{os.path.splitext(fn)[0]}.blend")
+            bpy.ops.wm.save_as_mainfile(filepath=out, copy=True)
+            logging.info(f"Exported packed .blend: {out}")
         else:
-            export_path = os.path.join(root, f"{os.path.splitext(file_name)[0]}.glb")
-            bpy.ops.export_scene.gltf(filepath=export_path, export_format='GLB')
-            logging.info(f"Exported .glb to {export_path}")
-
+            out = os.path.join(root, f"{os.path.splitext(fn)[0]}.fbx")
+            bpy.ops.export_scene.fbx(
+                filepath=out,
+                use_selection=False,
+                use_visible=False,
+                use_active_collection=False,
+                global_scale=1.0,
+                apply_unit_scale=True,
+                apply_scale_options='FBX_SCALE_NONE',
+                use_space_transform=True,
+                bake_space_transform=False,
+                object_types={'OTHER', 'LIGHT', 'ARMATURE', 'CAMERA', 'EMPTY', 'MESH'},
+                use_mesh_modifiers=True,
+                use_mesh_modifiers_render=True,
+                mesh_smooth_type='OFF',
+                colors_type='SRGB',
+                prioritize_active_color=False,
+                use_subsurf=False,
+                use_mesh_edges=False,
+                use_tspace=False,
+                use_triangles=False,
+                use_custom_props=False,
+                add_leaf_bones=True,
+                primary_bone_axis='Y',
+                secondary_bone_axis='X',
+                use_armature_deform_only=False,
+                armature_nodetype='NULL',
+                bake_anim=True,
+                bake_anim_use_all_bones=True,
+                bake_anim_use_nla_strips=True,
+                bake_anim_use_all_actions=True,
+                bake_anim_force_startend_keying=True,
+                bake_anim_step=1.0,
+                bake_anim_simplify_factor=1.0,
+                path_mode='COPY',
+                embed_textures=True,
+                batch_mode='OFF',
+                use_batch_own_dir=True,
+                axis_forward='-Z',
+                axis_up='Y'
+            )
+            logging.info(f"Exported .fbx: {out}")
         clean_scene()
-        logging.info("Scene cleaned up.")
-
-    except Exception as e:
-        if "MPLY formatted mesh files" in str(e):
-            logging.warning(f"Skipping unsupported file: {file_name} ({e})")
-            log_unsupported_file(file_name)
-        elif "AttributeError: 'NoneType' object has no attribute 'count'" in str(e):
-            logging.warning(f"Skipping file due to missing skeleton data: {file_name} ({e})")
-            log_unsupported_file(file_name)
+        logging.info(f"Scene cleaned.")
+        return True
+    except Exception as exc:
+        msg = str(exc)
+        if 'MPLY formatted mesh files' in msg or 'NoneType' in msg:
+            logging.warning(f"Unsupported: {fn} | {msg}")
+            log_unsupported(fn)
+            return False
         else:
-            logging.error(f"Error processing {file_name}: {e}")
-            raise e
+            logging.warning(f"Error on {fn}: {msg}")
+            return False
 
-logging.info("All mesh files have been processed.")
+def main():
+    wm = bpy.context.window_manager
+    files = find_mesh_files(search_directory)
+    total = len(files)
+    logging.info(f"Found {total} mesh files to process.")
+
+    if not is_background:
+        wm.progress_begin(0, total)
+
+    retry_counts = {}
+    processed = 0
+    queue = files.copy()
+
+    while queue:
+        fn, path, root = queue.pop(0)
+        attempts = retry_counts.get(fn, 0) + 1
+        success = process_mesh(fn, path, root)
+        if not success and attempts <= max_retries:
+            retry_counts[fn] = attempts
+            logging.warning(f"Retrying {fn}, attempt {attempts}")
+            queue.append((fn, path, root))
+            continue
+        elif not success:
+            logging.error(f"Failed after retries: {fn}")
+            log_unsupported(fn)
+        processed += 1
+        if not is_background:
+            wm.progress_update(processed)
+            for area in bpy.context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    area.header_text_set(f"Batch: {processed}/{total} - {fn}")
+
+    if not is_background:
+        wm.progress_end()
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.header_text_set(None)
+
+    logging.info("All files processed.")
+
+if __name__ == '__main__':
+    main()
